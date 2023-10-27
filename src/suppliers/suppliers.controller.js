@@ -1,3 +1,4 @@
+const asyncErrorBoundary = require("../errors/asyncErrorBoundary");
 const suppliersService = require("./suppliers.service.js");
 const hasProperties = require("../errors/hasProperties");
 const hasRequiredProperties = hasProperties("supplier_name", "supplier_email");
@@ -36,30 +37,27 @@ function hasOnlyValidProperties(req, res, next) {
    Otherwise, next() is called with an error object.
 */
 
-function supplierExists(req, res, next) {
+async function supplierExists(req, res, next) {
 
-  suppliersService
-    .read(req.params.supplierId)
-    .then((supplier) => {
-      if (supplier) {
-        res.locals.supplier = supplier;
-        return next();
-      }
-      next({ status: 404, message: `Supplier cannot be found.` });
-    })
-    .catch(next);
+  const supplier = await suppliersService.read(req.params.supplierId);
+  if (supplier) {
+    res.locals.supplier = supplier;
+    return next();
+  }
+
+  next({ status: 404, message: `Supplier cannot be found.` });
+
 }
 
 
 /* The req.body.data argument references the object containing the supplier information.
-  Chaining then() to suppliersService.create() executes the Knex query. If the promise 
-  resolves successfully, the server responds with a 201 status code along with the newly created supplier.
+  Uses async/await to call suppliersService.create() executes the Knex query. If successful, 
+  the server responds with a 201 status code along with the newly created supplier.
 */
-function create(req, res, next) {
-  suppliersService
-    .create(req.body.data)
-    .then((data) => res.status(201).json({ data }))
-    .catch(next);
+async function create(req, res, next) {
+
+  const data = await suppliersService.create(req.body.data);
+  res.status(201).json({ data })
 }
 
 /* Note that the supplier_id of updatedSupplier is always set to the existing 
@@ -68,28 +66,39 @@ function create(req, res, next) {
    successfully, then the server responds with the updated supplier.
 */
 
-function update(req, res, next) {
+async function update(req, res, next) {
   const updatedSupplier = {
     ...req.body.data,
     supplier_id: res.locals.supplier.supplier_id,
   };
 
-  suppliersService
-    .update(updatedSupplier)
-    .then((data) => res.json({ data }))
-    .catch(next);
+  const data = await suppliersService.update(updatedSupplier);
+  res.json({ data });
 }
 
 
-function destroy(req, res, next) {
-  suppliersService
-    .delete(res.locals.supplier.supplier_id)
-    .then(() => res.sendStatus(204))
-    .catch(next);
+async function destroy(req, res, next) {
+
+  const { supplier } = res.locals;
+  await suppliersService.delete(supplier.supplier_id);
+  res.sendStatus(204)
+
 }
 
 module.exports = {
-  create: [hasOnlyValidProperties, hasRequiredProperties, create],
-  update: [supplierExists, hasOnlyValidProperties, hasRequiredProperties, update],
-  delete: [supplierExists, destroy],
+  create: [
+    hasOnlyValidProperties, 
+    hasRequiredProperties, 
+    asyncErrorBoundary(create)
+  ],
+  update: [
+    asyncErrorBoundary(supplierExists), 
+    hasOnlyValidProperties, 
+    hasRequiredProperties, 
+    asyncErrorBoundary(update)
+  ],
+  delete: [
+    asyncErrorBoundary(supplierExists), 
+    asyncErrorBoundary(destroy)
+  ],
 };
