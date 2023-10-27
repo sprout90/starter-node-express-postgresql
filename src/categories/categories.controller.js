@@ -1,13 +1,17 @@
-async function list(req, res, next) {
-  res.json({
-    data: [
-      { category_name: "category 1" },
-      { category_name: "category 2" },
-      { category_name: "category 3" },
-    ],
-  });
+
+// requires the service with categories database code
+const categoriesService = require("./categories.service");
+
+/* Chaining then() to categoriesService.list() executes the Knex query.
+   Chaining catch(next) onto the promise will call next(), passing in the error.
+*/
+function list(req, res, next) {
+  categoriesService
+    .list()
+    .then((data) => res.json({ data }))
+    .catch(next);
 }
 
 module.exports = {
-  list: [list],
+  list,
 };
